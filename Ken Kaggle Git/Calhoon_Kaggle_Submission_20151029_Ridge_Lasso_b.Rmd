@@ -1,0 +1,204 @@
+---
+title: "Calhoon_Kaggle_Submission_20151028-a"
+author: "Ken Calhoon"
+date: "October 16, 2015"
+output: html_document
+---
+
+RMD shows code for Ridge and Lasso.
+
+Code below loads feature and target datasets, adds dummy columns for NA values, adds the median variable value for NA values, and merges target and feature datasets. 
+
+Column 1: subject.id
+column 2: ALSFRS_slope
+columns 3:859 original training.feature columns, with NAs replaced with median value
+columns 860-1716 new dummy columns named "is.na.[original column_name]"
+
+```{r, echo=FALSE}
+setwd("~/Dropbox/Stats202/Kaggle")
+training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
+training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
+feature.names <- names(training.features) # Create vector of feature names
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(training.features[,feature.name])
+                    # Convert boolean values to binary
+                    training.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(training.features) # Confirms dimension of new dataframe
+merged.data=merge(training.target,training.features,by="subject.id") # creates one DF with ALSFRS_slope (response variable) as column 2
+```
+
+Code below loads  the leaderboard_feature dataset, adds dummy columns for NA values, and adds the median variable value for NA values. Loads leaderboard.predictions
+
+Column 1: subject.id
+columns 2:858 original training.feature columns, with NAs replaced with median value
+columns 859-1715 new dummy columns named "is.na.[original column_name]"
+
+```{r, echo=FALSE}
+setwd("~/Dropbox/Stats202/Kaggle")
+leaderboard.predictions <- read.csv("~/Dropbox/Stats202/Kaggle/leaderboard_predictions-example.csv")
+leaderboard.features <- read.csv(file="leaderboard_features.csv", header=TRUE, sep=",")
+feature.names <- names(leaderboard.features) # Create vector of feature names
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(leaderboard.features[,feature.name])
+                    # Convert boolean values to binary
+                    leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    leaderboard.features[is.na.feature,feature.name] <- median(leaderboard.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
+```
+
+Replicating Ridge code from book
+
+```{r}
+x=model.matrix(Salary ∼ .,Hitters)[,-1]
+y=Hitters$Salary
+library(glmnet)
+grid=10^seq(10,-2,length=100)
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid)
+```
+
+
+Ridge code
+
+```{r}
+#install.packages("glmnet")
+library(glmnet)
+merged.data.subset=merged.data[,1:859]
+x=model.matrix(ALSFRS_slope~.,merged.data.subset)[,-2]
+y=merged.data.subset$ALSFRS_slope
+grid=20^seq(10,-2,length=100)
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid,standardize=FALSE)
+```
+
+```{r}
+dim(coef(ridge.mod))
+ridge.mod$lambda[60]
+coef(ridge.mod)[,60]
+```
+
+```{r}
+set.seed(1)
+train=sample(1:nrow(x),nrow(x)/2)
+test=(-train) # shouldn't this be != instead?
+y.test=y[test]
+ridge.mod=glmnet(x[train,],y[train],alpha=0,lambda=grid,thresh=1e-12)
+ridge.pred=predict(ridge.mod,s=4,newx=x[test,])
+rmse=mean((ridge.pred-y.test)^2)^.5
+rmse
+```
+
+Compare to lambda = 0 (means no influence from lambda)
+```{r}
+set.seed(1)
+train=sample(1:nrow(x),nrow(x)/2)
+test=(-train) # shouldn't this be != instead?
+y.test=y[test]
+ridge.mod=glmnet(x[train,],y[train],alpha=0,lambda=grid)
+ridge.pred=predict(ridge.mod,s=0,newx=x[test,]) #change s value
+rmse=mean((ridge.pred-y.test)^2)^.5
+rmse
+```
+
+
+Lasso
+```{r}
+#install.packages("glmnet")
+library(glmnet)
+merged.data.subset=merged.data[1:1000,1:858] #add back all rows
+x=model.matrix(ALSFRS_slope~.,merged.data.subset)[,-2]
+y=merged.data.subset$ALSFRS_slope
+lasso.mod=glmnet(x[train ,],y[train],alpha=1,lambda=grid)
+plot(lasso.mod)
+```
+
+Lasso + CV--Test Code
+```{r}
+
+rmse
+#rerun lasso.mod with all x & y (submission)
+merged.data.subset=merged.data[,1:859] #add back all data
+#predict with leaderboard.features (submission)
+
+```
+
+Lasso + CV--Real Model [Need to modify this]
+```{r}
+library(glmnet)
+library(boot)
+set.seed(1)
+merged.data.subset=merged.data[1:100,1:858] #can reduce rows to make easier to work with
+x=model.matrix(ALSFRS_slope~.,merged.data.subset)[,-2]
+y=merged.data.subset$ALSFRS_slope
+#ALSFRS_slope=y
+train=sample(1:nrow(x),nrow(x)/2)
+test=(-train)
+y.test=y[test]
+cv.out=cv.glmnet(x[train ,],y[train],alpha=1,nfolds=3) #change later to K=10, alpha can range 0 to 1 and can run CV on this to get best mix
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+#insert code to do the cv error estimate
+lasso.mod=glmnet(x[train ,],y[train],alpha=1,lambda=bestlam)
+cv.out=cv.glm(merged.data.subset[test,],lasso.mod,K=3) #Change this value later to 5 or 10
+lasso.pred=predict(lasso.mod,s=bestlam ,newx=x)
+rmse=mean((lasso.pred-y.test)^2)^.5
+rmse
+
+leaderboard.x=as.matrix(leaderboard.features[,1:858])
+#leaderboard.x=model.matrix(~.,data=leaderboard.features[,1:858])
+ALSFRS.leader.pred<-predict(lasso.mod,s=bestlam,newx=leaderboard.x) #make predictions
+
+leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
+head(leaderboard.predictions)
+```
+
+
+Coefficients
+```{r}
+out=glmnet(x,y,alpha=1,lambda=grid)
+lasso.coef=predict(out,type="coefficients",s=bestlam)
+lasso.coef[lasso.coef!=0]
+```
+
+```{r}
+out=glmnet(x,y,alpha=1,lambda=grid)
+lasso.coef=predict(out,type="coefficients",s=bestlam)
+lasso.coef[lasso.coef!=0]
+
+lasso.pred=predict(lasso.coef,x,type="response")
+rmse=mean((lasso.pred-y.test)^2)^.5
+rmse
+```
+
+LARS: least angle regression
+
+
+
+#####Predict ALSFRS_slope from leaderboard data and make predictions
+
+Predict the ALSFRS_slope and load to leaderboard.predictions
+
+```{r}
+#rerun lasso.mod with all x & y (submission)
+#predict with leaderboard.features (submission)
+merged.data.subset=merged.data[,1:859] #add back all data
+
+ALSFRS.leader.pred<-predict(lasso.mod,s=bestlam ,newx=leaderboard.features[,1:858]) #make predictions
+leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
+head(leaderboard.predictions)
+```
+
+We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
+
+```{r}
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151023.csv",row.names=FALSE) # NEED TO MODIFY
+```
+
