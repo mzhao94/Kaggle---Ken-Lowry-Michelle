@@ -47,17 +47,16 @@ sum(num.col.nas.lead)
 
 Removing variables that have more than half of observations recorded as NA
 ```{r}
-training.df.cut <- data.frame(matrix(nrow = dim(training.features)[1], ncol = length(feature.names)))
-test.df.cut <- data.frame(matrix(nrow = dim(leaderboard.features)[1], ncol = length(feature.names)))
-thrown.out <- 0
+training.df.cut <- merged.data[c("subject.id", "ALSFRS_slope")]
+#lead.df.cut <- leaderboard.features["subject.id"]
+thrown.out <- c()
 num.col.nas <- num.col.nas[2:length(num.col.nas)]
 for(i in 1:length(feature.names)) {
   #if the count of the variable is greater than dim(training.features)[1]/2, discard
-  if(num.col.nas[i] > dim(training.features)[1]/2) {
-    training.df.cut <- subset(training.df.cut, select = -c(i))
-    thrown.out[names(num.col.nas[i])] = names(num.col.nas[i])
+  if(num.col.nas[i] >= dim(training.features)[1]/2) {
+    thrown.out <- c(thrown.out, names(num.col.nas[i]))
   } else {
-    training.df.cut[,i] <- training.features[,i]
+    training.df.cut[,names(training.features[i])] <- training.features[,i]
   }
 }
 thrown.out
