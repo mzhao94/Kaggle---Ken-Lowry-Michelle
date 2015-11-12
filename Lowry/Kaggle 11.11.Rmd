@@ -1,0 +1,65 @@
+---
+title: "Kaggle 11.11.15"
+output: html_document
+---
+
+####Prepping data
+```{r}
+setwd("/Users/Lowry/Documents/Stanford/Senior/Fall/Stats_202/Data_Directory")
+training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
+training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
+feature.names <- names(training.features) # Create vector of feature names
+num.col.nas <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(training.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(training.features[,feature.name]))
+                    # Convert boolean values to binary
+                    training.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(training.features) # Confirms dimension of new dataframe
+merged.data=merge(training.target,training.features,by="subject.id") # creates one DF with ALSFRS_slope (response variable) as column 2
+sum(num.col.nas)
+```
+
+Column 1: subject.id columns 2:858 original training.feature columns, with NAs replaced with median value columns 859-1715 new dummy columns named "is.na.[original column_name]"
+```{r}
+leaderboard.predictions <- read.csv(file = "leaderboard_predictions-example.csv", header=TRUE, sep=",")
+leaderboard.features <- read.csv(file="leaderboard_features.csv", header=TRUE, sep=",")
+feature.names <- names(leaderboard.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(leaderboard.features[,feature.name])
+                    num.col.nas.lead[feature.name] = sum(is.na(training.features[,feature.name]))
+                    # Convert boolean values to binary
+                    leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    leaderboard.features[is.na.feature,feature.name] <- median(leaderboard.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
+sum(num.col.nas.lead)
+```
+
+Removing variables that have more than half of observations recorded as NA
+```{r}
+training.df.cut <- data.frame(matrix(nrow = dim(training.features)[1], ncol = length(feature.names)))
+test.df.cut <- data.frame(matrix(nrow = dim(leaderboard.features)[1], ncol = length(feature.names)))
+thrown.out <- 0
+num.col.nas <- num.col.nas[2:length(num.col.nas)]
+for(i in 1:length(feature.names)) {
+  #if the count of the variable is greater than dim(training.features)[1]/2, discard
+  if(num.col.nas[i] > dim(training.features)[1]/2) {
+    training.df.cut <- subset(training.df.cut, select = -c(i))
+    thrown.out[names(num.col.nas[i])] = names(num.col.nas[i])
+  } else {
+    training.df.cut[,i] <- training.features[,i]
+  }
+}
+thrown.out
+```
+

@@ -5,8 +5,10 @@ output: html_document
 
 
 ```{r}
-libary(ISLR)
-plot(Auto$mpg, Auto$year)
+library(ISLR)
+lm.fit = lm(Auto$mpg ~ year, data = Auto)
+plot(lm.fit)
+plot(line(Auto$year, Auto$mpg))
 ```
 
 You can also embed plots, for example:
