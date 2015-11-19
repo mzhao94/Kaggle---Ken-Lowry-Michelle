@@ -35,7 +35,6 @@ for (feature.name in feature.names[-1]) {
                     # Give the new dummy variable a meaningful name
                     dummy.name <- paste0("is.na.",feature.name)
                     is.na.feature <- is.na(leaderboard.features[,feature.name])
-                    num.col.nas.lead[feature.name] = sum(is.na(training.features[,feature.name]))
                     # Convert boolean values to binary
                     leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
                     # Replace NA with median value for each column
@@ -45,10 +44,10 @@ dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
 sum(num.col.nas.lead)
 ```
 
-Removing variables that have more than half of observations recorded as NA
+Removing variables from training and leaderboard data that have more than half of observations recorded as NA in training data set.
 ```{r}
 training.df.cut <- merged.data[c("subject.id", "ALSFRS_slope")]
-#lead.df.cut <- leaderboard.features["subject.id"]
+lead.df.cut <- leaderboard.features["subject.id"]
 thrown.out <- c()
 num.col.nas <- num.col.nas[2:length(num.col.nas)]
 for(i in 1:length(feature.names)) {
@@ -57,8 +56,28 @@ for(i in 1:length(feature.names)) {
     thrown.out <- c(thrown.out, names(num.col.nas[i]))
   } else {
     training.df.cut[,names(training.features[i])] <- training.features[,i]
+    lead.df.cut[,names(training.features[i])] <- leaderboard.features[,names(training.features[i])]
   }
 }
 thrown.out
+```
+
+Removing variables from training and leaderboard data that have more than half of observations recorded as NA in training data set.
+```{r}
+remaining.features = names(lead.df.cut)
+lead.col.num.nas = c()
+lead.thrown.out = c()
+for(remaining.feature in remaining.features) {
+  lead.col.num.nas[remaining.feature] = sum(is.na(lead.df.cut[,remaining.feature]))
+}
+
+for(i in 1:length(remaining.features)) {
+  #if the count of the variable is greater than dim(training.features)[1]/2, discard
+  if(lead.col.num.nas[i] >= dim(lead.df.cut)[1]/2) {
+    lead.thrown.out <- c(lead.thrown.out, names(lead.col.num.nas[i]))
+    lead.df.cut = lead.df.cut[,-i]
+  } 
+}
+lead.thrown.out
 ```
 
