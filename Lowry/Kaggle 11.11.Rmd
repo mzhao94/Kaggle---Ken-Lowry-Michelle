@@ -76,6 +76,7 @@ for(i in 1:length(remaining.features)) {
   if(lead.col.num.nas[i] >= dim(lead.df.cut)[1]/2) {
     lead.thrown.out <- c(lead.thrown.out, names(lead.col.num.nas[i]))
     lead.df.cut = lead.df.cut[,-i]
+    training.df.cut = training.df.cut[,-(i+1)]
   } 
 }
 lead.thrown.out
