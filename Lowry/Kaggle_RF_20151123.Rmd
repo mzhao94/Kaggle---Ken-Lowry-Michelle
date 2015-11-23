@@ -78,7 +78,7 @@ ______________________________________________________________
 
 ```{r}
 #adjust filter ratio to screen 
-filter.ratio=.9 #NAs must be less than this ratio for the variable to be kept
+filter.ratio=.5 #NAs must be less than this ratio for the variable to be kept
 #creates vector filter: true mean keep the variable based on filter ratio above
 variable.filter=as.logical((feature.nas<=nrow(training.features)*filter.ratio) & (leader.nas<=nrow(leaderboard.features)*filter.ratio) & (validation.nas<=nrow(validation.features)*filter.ratio))
 training.feat.subset=training.features[,variable.filter]
@@ -124,7 +124,7 @@ valid.rmse
 
 #calculate leaderboard predictions
 #leaderboard.correct.vars <- leaderboard.features[,1:858]
-ALSFRS.leader.pred=predict(prune.k.tree,newdata=leaderboard.feat.subset)
+ALSFRS.leader.pred=predict(rf.training,newdata=leaderboard.feat.subset)
 leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
 head(leaderboard.predictions)
 ```
@@ -132,7 +132,7 @@ head(leaderboard.predictions)
 We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
 
 ```{r}
-write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151121_decision_tree_cv.csv",row.names=FALSE) # NEED TO MODIFY
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151121_RF_.5.csv",row.names=FALSE) # NEED TO MODIFY
 ```
 
 

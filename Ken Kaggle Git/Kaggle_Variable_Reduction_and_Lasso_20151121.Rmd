@@ -7,8 +7,8 @@ output: html_document
 
 ####Prepping data
 ```{r}
-#setwd("/Users/Lowry/Documents/Stanford/Senior/Fall/Stats_202/Data_Directory")
-setwd("~/Dropbox/Stats202/Kaggle")
+setwd("/Users/Lowry/Documents/Stanford/Senior/Fall/Stats_202/Data_Directory")
+#setwd("~/Dropbox/Stats202/Kaggle")
 training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
 training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
 feature.names <- names(training.features) # Create vector of feature names

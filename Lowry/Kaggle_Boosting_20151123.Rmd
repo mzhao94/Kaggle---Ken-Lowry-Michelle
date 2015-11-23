@@ -78,7 +78,7 @@ ______________________________________________________________
 
 ```{r}
 #adjust filter ratio to screen 
-filter.ratio=.9 #NAs must be less than this ratio for the variable to be kept
+filter.ratio=.5 #NAs must be less than this ratio for the variable to be kept
 #creates vector filter: true mean keep the variable based on filter ratio above
 variable.filter=as.logical((feature.nas<=nrow(training.features)*filter.ratio) & (leader.nas<=nrow(leaderboard.features)*filter.ratio) & (validation.nas<=nrow(validation.features)*filter.ratio))
 training.feat.subset=training.features[,variable.filter]
@@ -103,28 +103,25 @@ leaderboard.feat.subset=leaderboard.feat.subset[,-c((ncols/2+1):ncols)]
 
 ______________________________________________________________
 
-####Random Forest Model. Uses data created above. 
+####Boosting Model. Uses data created above. 
 
-####Random Forests
+####Boosting
 ```{r}
-#library(tree)
-library(randomForest)
+library(gbm)
 set.seed(1)
-train.size=.8
 merged.data.subset=training.subset.with.target
-train=sample(1:nrow(merged.data.subset),nrow(merged.data.subset)*train.size)
-test=-train
 
-rf.training = randomForest(ALSFRS_slope ~ ., data = merged.data.subset, importance = TRUE)
+
+boost.training = gbm(ALSFRS_slope ~ ., data = merged.data.subset, distribution = "gaussian", n.trees = 1000, interaction.depth = 2)
 
 #Validation RMSE
-slopes.rf = predict(rf.training, newdata = validation.subset.with.target[,-2])
-valid.rmse = mean((slopes.rf-validation.subset.with.target$ALSFRS_slope)^2)^.5
+slopes.boost = predict(boost.training, newdata = validation.subset.with.target[,-2], n.trees = 1000)
+valid.rmse = mean((slopes.boost-validation.subset.with.target$ALSFRS_slope)^2)^.5
 valid.rmse 
 
 #calculate leaderboard predictions
 #leaderboard.correct.vars <- leaderboard.features[,1:858]
-ALSFRS.leader.pred=predict(prune.k.tree,newdata=leaderboard.feat.subset)
+ALSFRS.leader.pred=predict(rf.training,newdata=leaderboard.feat.subset)
 leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
 head(leaderboard.predictions)
 ```
@@ -132,7 +129,7 @@ head(leaderboard.predictions)
 We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
 
 ```{r}
-write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151121_decision_tree_cv.csv",row.names=FALSE) # NEED TO MODIFY
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151121_RF_.5.csv",row.names=FALSE) # NEED TO MODIFY
 ```
 
 
