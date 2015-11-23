@@ -1,0 +1,177 @@
+---
+title: "Calhoon_Kaggle_Submission_20151028-a"
+author: "Ken Calhoon"
+date: "October 16, 2015"
+output: html_document
+---
+
+####Prepping data
+```{r}
+#setwd("/Users/Lowry/Documents/Stanford/Senior/Fall/Stats_202/Data_Directory")
+setwd("~/Dropbox/Stats202/Kaggle")
+training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
+training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
+feature.names <- names(training.features) # Create vector of feature names
+num.col.nas <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(training.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(training.features[,feature.name]))
+                    # Convert boolean values to binary
+                    training.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(training.features) # Confirms dimension of new dataframe
+#merged.data=merge(training.target,training.features,by="subject.id") # creates one DF with ALSFRS_slope (response variable) as column 2
+feature.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+Column 1: subject.id columns 2:858 original training.feature columns, with NAs replaced with median value columns 859-1715 new dummy columns named "is.na.[original column_name]"
+```{r}
+leaderboard.predictions <- read.csv(file = "leaderboard_predictions-example.csv", header=TRUE, sep=",")
+leaderboard.features <- read.csv(file="leaderboard_features.csv", header=TRUE, sep=",")
+feature.names <- names(leaderboard.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(leaderboard.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(leaderboard.features[,feature.name]))
+                    # Convert boolean values to binary
+                    leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    leaderboard.features[is.na.feature,feature.name] <- median(leaderboard.features[,feature.name],
+                    na.rm = TRUE)
+}
+dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
+leader.nas=c(num.col.nas,num.col.nas[-1])# creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+```{r}
+validation.target <- read.csv(file = "validation_target.csv", header=TRUE, sep=",")
+validation.features <- read.csv(file="validation_features.csv", header=TRUE, sep=",")
+feature.names <- names(validation.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(validation.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(validation.features[,feature.name]))
+                    # Convert boolean values to binary
+                    validation.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    validation.features[is.na.feature,feature.name] <- median(validation.features[,feature.name],
+                    na.rm = TRUE)
+}
+dim.data.frame(validation.features) # Confirms dimension of new dataframe
+validation.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+______________________________________________________________
+
+###Adjust "filter.ratio" below to adjust level of NAs screened out. Variables then screened out based on this. Portion of NAs must be lower than ratio to be included. 1.0 leaves all variables intact
+
+```{r}
+#adjust filter ratio to screen 
+filter.ratio=.9 #NAs must be less than this ratio for the variable to be kept
+#creates vector filter: true mean keep the variable based on filter ratio above
+variable.filter=as.logical((feature.nas<=nrow(training.features)*filter.ratio) & (leader.nas<=nrow(leaderboard.features)*filter.ratio) & (validation.nas<=nrow(validation.features)*filter.ratio))
+training.feat.subset=training.features[,variable.filter]
+leaderboard.feat.subset=leaderboard.features[,variable.filter]
+validation.feat.subset=validation.features[,variable.filter]
+
+#creates full dataframes with target as second variable
+training.subset.with.target=merge(training.target,training.feat.subset,by="subject.id")
+validation.subset.with.target=merge(validation.target,validation.feat.subset,by="subject.id")
+
+```
+
+
+# Use below to eliminate boolean "isna" columns is desired
+
+```{r}
+ncols=ncol(training.subset.with.target)
+training.subset.with.target=training.subset.with.target[,-c((ncols/2+2):ncols)]
+validation.subset.with.target=validation.subset.with.target[,-c((ncols/2+2):ncols)]
+leaderboard.feat.subset=leaderboard.feat.subset[,-c((ncols/2+1):ncols)]
+```
+
+______________________________________________________________
+
+####Lasso Model. Uses data created above. 
+
+Lasso + validation set--Real Model
+```{r}
+library(glmnet)
+library(boot)
+set.seed(1)
+train.size=.9
+alpha.value=0 #0 equals ridge and 1 = lasso
+folds=5
+merged.data.subset=validation.subset.with.target #change input variables here
+#merged.data.subset=merged.data[1:250,] #can reduce rows for testing
+x=model.matrix(ALSFRS_slope~.,merged.data.subset)[,-2]
+y=merged.data.subset$ALSFRS_slope #ALSFRS_slope=y
+train=sample(1:nrow(x),nrow(x)*train.size) #Can adjust the amount of training data
+test=-train
+y.test=y[test]
+cv.out=cv.glmnet(x[train ,],y[train],alpha=alpha.value,nfolds=folds) #Folds = 5 seems as good as 10, alpha can range 0 to 1 and can run CV on this to get best mix
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+
+#calculate the RMSE: training data + bestlam, tested on test data
+lasso.mod=glmnet(x[train,],y[train],alpha=alpha.value,lambda=bestlam)
+lasso.pred=predict(lasso.mod,s=bestlam,newx=x[test,])
+test.rmse=mean((lasso.pred-y.test)^2)^.5
+test.rmse
+plot(y.test,lasso.pred)
+abline(0,1,col = "red")
+
+#build final lasso model on all training data
+
+#show coefficients
+final.lasso.mod=glmnet(x,y,alpha=alpha.value,lambda=bestlam)
+lasso.coef=as.matrix(predict(final.lasso.mod,type="coefficients",s=bestlam))
+lasso.value=round(lasso.coef[which(lasso.coef != 0)],2)
+lasso.names=rownames(lasso.coef)[lasso.coef!=0]
+cbind(lasso.names,lasso.value)
+
+#validation RMSE
+validation.matx=model.matrix(ALSFRS_slope~.,validation.subset.with.target)[,-2]
+valid.pred=predict(lasso.mod,s=bestlam,newx=validation.matx)
+valid.rmse=mean((valid.pred-validation.target$ALSFRS_slope)^2)^.5
+valid.rmse
+plot(validation.target$ALSFRS_slope,valid.pred)
+abline(0,1,col = "red")
+
+#calculate leaderboard predictions
+#leaderboard.correct.vars <- leaderboard.features[,1:858]
+leaderboard.correct.vars <- leaderboard.feat.subset
+leaderboard.matx <- as.matrix(leaderboard.correct.vars)
+ALSFRS.leader.pred<-predict(final.lasso.mod,s=bestlam,newx=leaderboard.matx) #make predictions
+leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
+head(leaderboard.predictions)
+```
+
+We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
+
+```{r}
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151121_validation_set.csv",row.names=FALSE) # NEED TO MODIFY
+```
+
+
+
+###Notes
+Lasso#1: 0.0165 (Bestlam), 0.54713 (RMSE), 0.62271 (Kaggle)
+train=0.7, nfolds=3
+Lasso#2: 0.0184, 0.57174 (reran with some proofing
+Lasso#3: 0.0181, 0.545409 (train=0.8, nfolds=5)
+Lasso#3: 0.0167, 0.5731 (train=0.7, nfolds=10)
+Lasso#3: 0.0181, 0.545409 0.60973 (Kaggle) (train=0.8, nfolds=10)
+

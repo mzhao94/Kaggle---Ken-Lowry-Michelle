@@ -1,0 +1,121 @@
+---
+title: "Calhoon_Kaggle_Scratch_v1"
+author: "Ken Calhoon"
+date: "October 16, 2015"
+output: html_document
+---
+
+Code below loads feature and target datasets, adds dummy columns for NA values, adds the median variable value for NA values, and merges target and feature datasets. 
+
+Column 1: subject.id
+column 2: ALSFRS_slope
+columns 3:859 original training.feature columns, with NAs replaced with median value
+columns 860-1716 new dummy columns named "is.na.[original column_name]"
+
+```{r, echo=FALSE}
+setwd("~/Dropbox/Stats202/Kaggle")
+training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
+training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
+feature.names <- names(training.features) # Create vector of feature names
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(training.features[,feature.name])
+                    # Convert boolean values to binary
+                    training.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(training.features) # Confirms dimension of new dataframe
+merged.data=merge(training.target,training.features,by="subject.id") # creates one DF with ALSFRS_slope (response variable) as column 2
+```
+
+Code below loads  the leaderboard_feature dataset, adds dummy columns for NA values, and adds the median variable value for NA values. Loads leaderboard.predictions
+
+Column 1: subject.id
+columns 2:858 original training.feature columns, with NAs replaced with median value
+columns 859-1715 new dummy columns named "is.na.[original column_name]"
+
+```{r, echo=FALSE}
+setwd("~/Dropbox/Stats202/Kaggle")
+leaderboard.predictions <- read.csv("~/Dropbox/Stats202/Kaggle/leaderboard_predictions-example.csv")
+leaderboard.features <- read.csv(file="leaderboard_features.csv", header=TRUE, sep=",")
+feature.names <- names(leaderboard.features) # Create vector of feature names
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(leaderboard.features[,feature.name])
+                    # Convert boolean values to binary
+                    leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    leaderboard.features[is.na.feature,feature.name] <- median(leaderboard.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
+```
+
+
+####Initial Models
+
+Top 12 correlation variables
+```{r, echo=FALSE}
+library(boot)
+set.seed(1)
+glm.fit=glm(ALSFRS_slope~onset_delta+last.q1_speech+fvc.slope+min.q1_speech+meansquares.q1_speech+sd.alsfrs_total+last.mouth+min.mouth+mean.q1_speech+meansquares.mouth+onset_site.Limb+mean.mouth, data = merged.data)
+cv.err=cv.glm(merged.data,glm.fit, K=5) #5 cross-folds
+# cv.err$delta # cross validation sqd error estimate (the second value adjusts for not using LOOCV)
+cv.err$delta^.5 #cv estimate of RMSE
+ALSFRS.pred<-predict(glm.fit,merged.data,type="response") #make predictions
+plot(ALSFRS.pred,merged.data$ALSFRS_slope) #plot the results
+RMSE=(mean((ALSFRS.pred-merged.data$ALSFRS_slope)^2))^.5
+RMSE
+```
+
+
+~ Best subset model from 12 variables above. 4 variables
+```{r, echo=FALSE}
+library(boot)
+set.seed(1)
+glm.fit=glm(ALSFRS_slope~onset_delta+last.q1_speech+fvc.slope+sd.alsfrs_total, data = training.subset.with.target)
+cv.err=cv.glm(training.subset.with.target,glm.fit, K=5) #5 cross-folds
+# cv.err$delta # cross validation sqd error estimate (the second value adjusts for not using LOOCV)
+cv.err$delta^.5 #cv estimate of RMSE
+ALSFRS.pred<-predict(glm.fit,training.subset.with.target,type="response") #make predictions
+plot(ALSFRS.pred,training.subset.with.target$ALSFRS_slope) #plot the results
+plot(ALSFRS.pred,training.subset.with.target$ALSFRS_slope-ALSFRS.pred) # plot the residuals
+RMSE=(mean((ALSFRS.pred-training.subset.with.target$ALSFRS_slope)^2))^.5
+RMSE
+summary(glm.fit)
+#should rerun the model with all data
+```
+
+(new) RMSE calc on the validation set
+```{r}
+valid.pred<-predict(glm.fit,validation.subset.with.target,type="response")
+valid.rmse=mean((valid.pred-validation.target$ALSFRS_slope)^2)^.5
+valid.rmse
+```
+
+#####Notes
+Reran this model.
+CV error=.578
+Training RMSE=0.577
+Validation Set RMSE=.612
+Kaggle=.5882
+
+
+#####Predict ALSFRS_slope from leaderboard data and make predictions
+
+Predict the ALSFRS_slope and load to leaderboard.predictions
+
+```{r}
+ALSFRS.leader.pred<-predict(glm.fit,leaderboard.features,type="response") #make predictions
+leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
+head(leaderboard.predictions)
+```
+
+We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
+
+```{r}
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151023.csv",row.names=FALSE) # NEED TO MODIFY
+```
+
