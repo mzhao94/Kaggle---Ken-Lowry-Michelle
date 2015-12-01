@@ -1,6 +1,6 @@
 ---
-title: "Kaggle_Decision_Tree_20151121"
-author: "Ken Calhoon"
+title: "Kaggle_RF_exclude Outliers_20151121"
+author: "Lowry Yankwich"
 date: "October 16, 2015"
 output: html_document
 ---
@@ -14,7 +14,7 @@ library(outliers)
 library(daff)
 training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
 training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
-feature.names <- names(training.features) # Create vector of feature names
+feature.names <- names(training.features) # Create vector of feature names (858 to begin with, including subject ID, but discluding ALSFRS_slope)
 num.col.nas <- 0
 for (feature.name in feature.names[-1]) {
                     # Give the new dummy variable a meaningful name
@@ -27,15 +27,11 @@ for (feature.name in feature.names[-1]) {
                     training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
 }
 dim.data.frame(training.features) # Confirms dimension of new dataframe
-training.features[,-1]<-rm.outlier(training.features[,-1],fill = F) #eliminates outliers (see help for options to add median or mean)
+#training.features[,-1]<-rm.outlier(training.features[,-1],fill = T) #replaces outlier values with mean (see help for options to add median or mean)
 feature.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
-sum(num.col.nas)
+training.features <- training.features[-1273, ] #takes out subject id 525450
 ```
 
-
-```{r}
-
-```
 
 Column 1: subject.id columns 2:858 original training.feature columns, with NAs replaced with median value columns 859-1715 new dummy columns named "is.na.[original column_name]"
 ```{r}
@@ -55,7 +51,7 @@ for (feature.name in feature.names[-1]) {
                     na.rm = TRUE)
 }
 dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
-leaderboard.features[,-1]<-rm.outlier(leaderboard.features[,-1],fill = F) #eliminates outlier
+#leaderboard.features[,-1]<-rm.outlier(leaderboard.features[,-1],fill = T) #eliminates outlier
 leader.nas=c(num.col.nas,num.col.nas[-1])# creates double wide vector for original and boolean variables
 sum(num.col.nas)
 ```
@@ -77,7 +73,7 @@ for (feature.name in feature.names[-1]) {
                     na.rm = TRUE)
 }
 dim.data.frame(validation.features) # Confirms dimension of new dataframe
-validation.features[,-1]<-rm.outlier(validation.features[,-1],fill = F) #eliminates outliers
+#validation.features[,-1]<-rm.outlier(validation.features[,-1],fill = F) #eliminates outliers
 validation.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
 sum(num.col.nas)
 ```
@@ -115,44 +111,23 @@ ______________________________________________________________
 
 
 
-####Boosting
+####RF
 ```{r}
-#install.packages("gbm")
-library(gbm)
+library(randomForest)
 set.seed(1)
-train.size=.7
-merged.data.subset=training.subset.with.target #adjust for testing
-train=sample(1:nrow(merged.data.subset),nrow(merged.data.subset)*train.size)
-test=-train
-boost.mod=gbm(ALSFRS_slope~.,data=merged.data.subset[train,],distribution="gaussian",n.trees=5000,interaction.depth=4)
+train.size=.8
+merged.data.subset=training.subset.with.target
 
-summary(boost.mod)
-
-#par(mfrow=c(1,2))
-#plot(boost.mod,i="slope.weight.slope")
-#plot(boost.mod,i="last.slope.fvc_percent")
-
-#Test RMSE
-boost.predict=predict(boost.mod,newdata=merged.data.subset[test,],n.trees=5000)
-test.rmse=mean((merged.data.subset$ALSFRS_slope[test]-boost.predict)^2)^.5
-test.rmse
-
-plot(merged.data.subset$ALSFRS_slope[test],boost.predict)
-abline(0,1)
+rf.training = randomForest(ALSFRS_slope ~ ., data = merged.data.subset, importance = TRUE)
 
 #Validation RMSE
-valid.predict=predict(boost.mod,newdata=validation.feat.subset,n.trees=5000)
-valid.rmse=mean((validation.subset.with.target$ALSFRS_slope-valid.predict)^2)^.5
-valid.rmse
+slopes.rf = predict(rf.training, newdata = validation.subset.with.target[,-2])
+valid.rmse = mean((slopes.rf-validation.subset.with.target$ALSFRS_slope)^2)^.5
+valid.rmse 
 
-plot(validation.subset.with.target$ALSFRS_slope,valid.predict)
-abline(0,1)
-
-#Rerun boosting with all training feature data
-boost.mod=gbm(ALSFRS_slope~.,data=merged.data.subset,distribution="gaussian",n.trees=5000,interaction.depth=4)
-
-#Leaderboard predictions
-ALSFRS.leader.pred=predict(boost.mod,newdata=leaderboard.feat.subset,n.trees=5000)
+#calculate leaderboard predictions
+#leaderboard.correct.vars <- leaderboard.features[,1:858]
+ALSFRS.leader.pred=predict(rf.training,newdata=leaderboard.feat.subset)
 leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
 head(leaderboard.predictions)
 ```
@@ -160,7 +135,7 @@ head(leaderboard.predictions)
 We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
 
 ```{r}
-write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151124_boosting_outlierv1.csv",row.names=FALSE) # NEED TO MODIFY
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151130_RF_rm525450.csv",row.names=FALSE) # NEED TO MODIFY
 ```
 
 
