@@ -1,0 +1,187 @@
+---
+title: "Kaggle_Decision_Tree_20151121"
+author: "Ken Calhoon"
+date: "October 16, 2015"
+output: html_document
+---
+
+####Prepping data
+```{r}
+#setwd("/Users/Lowry/Documents/Stanford/Senior/Fall/Stats_202/Data_Directory")
+setwd("~/Dropbox/Stats202/Kaggle")
+subject_ids_remove=c(525450) #add in additional subject IDs to remove
+training.features <- read.csv(file="training_features.csv", header=TRUE, sep=",")
+training.featues=training.features[training.features$subject.id!=subject_ids_remove,]
+training.target <- read.csv(file="training_target.csv",header=TRUE, sep=",")
+training.target <- training.target[training.target$subject.id!=subject_ids_remove,]
+feature.names <- names(training.features) # Create vector of feature names
+num.col.nas <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(training.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(training.features[,feature.name]))
+                    # Convert boolean values to binary
+                    training.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    training.features[is.na.feature,feature.name] <- median(training.features[,feature.name], na.rm = TRUE)
+}
+dim.data.frame(training.features) # Confirms dimension of new dataframe
+#merged.data=merge(training.target,training.features,by="subject.id") # creates one DF with ALSFRS_slope (response variable) as column 2
+feature.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+Column 1: subject.id columns 2:858 original training.feature columns, with NAs replaced with median value columns 859-1715 new dummy columns named "is.na.[original column_name]"
+```{r}
+leaderboard.predictions <- read.csv(file = "leaderboard_predictions-example.csv", header=TRUE, sep=",")
+leaderboard.features <- read.csv(file="leaderboard_features.csv", header=TRUE, sep=",")
+feature.names <- names(leaderboard.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(leaderboard.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(leaderboard.features[,feature.name]))
+                    # Convert boolean values to binary
+                    leaderboard.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    leaderboard.features[is.na.feature,feature.name] <- median(leaderboard.features[,feature.name],
+                    na.rm = TRUE)
+}
+dim.data.frame(leaderboard.features) # Confirms dimension of new dataframe
+leader.nas=c(num.col.nas,num.col.nas[-1])# creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+```{r}
+validation.target <- read.csv(file = "validation_target.csv", header=TRUE, sep=",")
+validation.features <- read.csv(file="validation_features.csv", header=TRUE, sep=",")
+feature.names <- names(validation.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(validation.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(validation.features[,feature.name]))
+                    # Convert boolean values to binary
+                    validation.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    validation.features[is.na.feature,feature.name] <- median(validation.features[,feature.name],
+                    na.rm = TRUE)
+}
+dim.data.frame(validation.features) # Confirms dimension of new dataframe
+validation.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
+sum(num.col.nas)
+```
+
+
+```{r}
+
+test.features <- read.csv(file="test_features.csv", header=TRUE, sep=",")
+feature.names <- names(test.features) # Create vector of feature names
+num.col.nas.lead <- 0
+for (feature.name in feature.names[-1]) {
+                    # Give the new dummy variable a meaningful name
+                    dummy.name <- paste0("is.na.",feature.name)
+                    is.na.feature <- is.na(test.features[,feature.name])
+                    num.col.nas[feature.name] = sum(is.na(test.features[,feature.name]))
+                    # Convert boolean values to binary
+                    test.features[,dummy.name] <- as.integer(is.na.feature)
+                    # Replace NA with median value for each column
+                    test.features[is.na.feature,feature.name] <- median(test.features[,feature.name],
+                    na.rm = TRUE)
+}
+dim.data.frame(test.features) # Confirms dimension of new dataframe
+test.nas=c(num.col.nas,num.col.nas[-1]) # creates double wide vector for original and boolean variables
+sum(num.col.nas)
+test.predictions=data.frame(cbind(subject.id=test.features$subject.id,ALSFRS_slope=rep(0,nrow(test.features)))) #creates empty predictions df
+```
+
+
+______________________________________________________________
+
+###Adjust "filter.ratio" below to adjust level of NAs screened out. Variables then screened out based on this. Portion of NAs must be lower than ratio to be included. 1.0 leaves all variables intact
+
+```{r}
+#adjust filter ratio to screen 
+filter.ratio=.75 #NAs must be less than this ratio for the variable to be kept
+#creates vector filter: true mean keep the variable based on filter ratio above
+variable.filter=as.logical((feature.nas<=nrow(training.features)*filter.ratio) & (leader.nas<=nrow(leaderboard.features)*filter.ratio) & (validation.nas<=nrow(validation.features)*filter.ratio) & (test.nas<=nrow(test.features)*filter.ratio))
+training.feat.subset=training.features[,variable.filter]
+leaderboard.feat.subset=leaderboard.features[,variable.filter]
+validation.feat.subset=validation.features[,variable.filter]
+test.feat.subset=test.features[,variable.filter]
+
+#creates full dataframes with target as second variable
+training.subset.with.target=merge(training.target,training.feat.subset,by="subject.id")
+validation.subset.with.target=merge(validation.target,validation.feat.subset,by="subject.id")
+
+```
+
+
+# Use below to eliminate boolean "isna" columns is desired
+
+```{r}
+ncols=ncol(training.subset.with.target)
+training.subset.with.target=training.subset.with.target[,-c((ncols/2+2):ncols)]
+validation.subset.with.target=validation.subset.with.target[,-c((ncols/2+2):ncols)]
+leaderboard.feat.subset=leaderboard.feat.subset[,-c((ncols/2+1):ncols)]
+test.feat.subset=test.feat.subset[,-c((ncols/2+1):ncols)]
+```
+
+______________________________________________________________
+
+
+####Random Forest Model. Uses data created above. 
+
+####Random Forests
+```{r}
+#library(tree)
+library(randomForest)
+set.seed(1)
+train.size=.7
+variables.try=round((ncol(leaderboard.feat.subset)-2)/3)
+merged.data.subset=training.subset.with.target
+train=sample(1:nrow(merged.data.subset),nrow(merged.data.subset)*train.size)
+test=-train
+
+rf.training = randomForest(ALSFRS_slope ~ ., data = merged.data.subset[train,], importance = TRUE,mtry=variables.try) #can also adjust # of trees (ntree=)
+rf.training$ntree #trees
+rf.training$mtry #variables
+#importance(rf.training)
+#varImpPlot(rf.training)
+slopes.rf = predict(rf.training, newdata = merged.data.subset[test,-2])
+test.rmse.rf = mean((slopes.rf-merged.data.subset$ALSFRS_slope[test])^2)^.5
+test.rmse.rf 
+
+
+#Validation RMSE
+slopes.rf = predict(rf.training, newdata = validation.subset.with.target[,-2])
+valid.rmse = mean((slopes.rf-validation.subset.with.target$ALSFRS_slope)^2)^.5
+valid.rmse
+
+#recalculate RF with all data
+rf.full.mod = randomForest(ALSFRS_slope ~ ., data = merged.data.subset, importance = TRUE)
+
+#calculate leaderboard predictions
+#leaderboard.correct.vars <- leaderboard.features[,1:858]
+ALSFRS.leader.pred=predict(rf.full.mod,newdata=leaderboard.feat.subset)
+leaderboard.predictions$ALSFRS_slope <- ALSFRS.leader.pred
+head(leaderboard.predictions)
+
+#test predictions
+ALSFRS.test.pred=predict(rf.full.mod,newdata=test.feat.subset)
+test.predictions$ALSFRS_slope <- ALSFRS.test.pred
+head(test.predictions)
+
+```
+
+We use **write.csv** function to write a CSV file in the contest format with the leaderboard subject predictions. 
+
+```{r}
+write.csv(leaderboard.predictions, file = "leaderboard_predictions_20151201_RF_.5.csv",row.names=FALSE) # NEED TO MODIFY
+
+write.csv(test.predictions, file = "test_predictions_20151201_RF_.csv",row.names=FALSE) # NEED TO MODIFY
+```
+
